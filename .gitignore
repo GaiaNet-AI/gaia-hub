@@ -1,0 +1,6 @@
+logs/
+data/
+Cargo.lock
+target/
+.cargo
+.env
