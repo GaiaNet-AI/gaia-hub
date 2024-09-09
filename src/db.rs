@@ -307,6 +307,19 @@ pub fn query_node_by_node_id(node_id: &str) -> Result<Option<models::Node>> {
     }
 }
 
+pub fn query_node_by_subdomain(subdomain: &str) -> Result<Option<models::Node>> {
+    let mut conn = establish_connection()?;
+    use crate::schema::node_status::dsl::{node_status, subdomain as sd};
+    match node_status
+        .filter(sd.eq(subdomain))
+        .first::<models::Node>(&mut conn)
+    {
+        Ok(node) => Ok(Some(node)),
+        Err(diesel::NotFound) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
 // Update node_status table, set status to offline if the last_active_time is before given time
 pub fn close_expired_nodes(seconds_before: &chrono::NaiveDateTime) -> Result<usize> {
     let mut conn = establish_connection()?;
@@ -404,4 +417,72 @@ pub fn query_living_nodes(
         .offset(page * size)
         .select(models::LivingNode::as_select())
         .load::<models::LivingNode>(&mut conn)?)
+}
+
+pub fn insert_domain_node(domain: &str, node_id: &str) -> Result<usize> {
+    use crate::schema::domain_nodes;
+    let _domain_node = models::DomainNodes {
+        domain: domain.to_string(),
+        node_id: node_id.to_string(),
+    };
+
+    let mut conn = establish_connection()?;
+
+    Ok(diesel::insert_into(domain_nodes::table)
+        .values(&_domain_node)
+        .execute(&mut conn)?)
+}
+
+pub fn query_domain_nodes(domain: &str) -> Result<Vec<models::DomainNodes>> {
+    use crate::schema::domain_nodes::dsl::{domain as d, domain_nodes};
+    let mut conn = establish_connection()?;
+    let query = domain_nodes.filter(d.eq(domain));
+    Ok(query.load::<models::DomainNodes>(&mut conn)?)
+}
+
+pub fn query_domain_node(domain: &str, node_id: &str) -> Result<Option<models::DomainNodes>> {
+    use crate::schema::domain_nodes::dsl::{domain as d, domain_nodes, node_id as ni};
+    let mut conn = establish_connection()?;
+    let query = domain_nodes.filter(d.eq(domain)).filter(ni.eq(node_id));
+    match query.first::<models::DomainNodes>(&mut conn) {
+        Ok(node) => Ok(Some(node)),
+        Err(diesel::NotFound) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub fn query_domain_node_by_node_id(node_id: &str) -> Result<Option<models::DomainNodes>> {
+    use crate::schema::domain_nodes::dsl::{domain_nodes, node_id as ni};
+    let mut conn = establish_connection()?;
+    let query = domain_nodes.filter(ni.eq(node_id));
+    match query.first::<models::DomainNodes>(&mut conn) {
+        Ok(node) => Ok(Some(node)),
+        Err(diesel::NotFound) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub fn delete_domain_node(domain: &str, node_id: &str) -> Result<usize> {
+    use crate::schema::domain_nodes::dsl::{domain as d, domain_nodes, node_id as ni};
+    let mut conn = establish_connection()?;
+    let query = domain_nodes.filter(d.eq(domain)).filter(ni.eq(node_id));
+    Ok(diesel::delete(query).execute(&mut conn)?)
+}
+
+pub fn get_distinct_domains() -> Result<Vec<String>> {
+    use crate::schema::domain_nodes::dsl::{domain, domain_nodes};
+    let mut conn = establish_connection()?;
+    Ok(domain_nodes
+        .select(domain)
+        .distinct()
+        .load::<String>(&mut conn)?)
+}
+
+pub fn get_nodes_by_domain(domain: &str) -> Result<Vec<String>> {
+    use crate::schema::domain_nodes::dsl::{domain as d, domain_nodes, node_id};
+    let mut conn = establish_connection()?;
+    Ok(domain_nodes
+        .filter(d.eq(domain))
+        .select(node_id)
+        .load::<String>(&mut conn)?)
 }

@@ -36,3 +36,10 @@ diesel::table! {
         updated_at -> Int8,
     }
 }
+
+diesel::table! {
+    domain_nodes (domain, node_id) {
+        domain -> Varchar,
+        node_id -> Varchar,
+    }
+}

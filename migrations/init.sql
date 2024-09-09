@@ -39,3 +39,10 @@ CREATE INDEX idx_status ON node_status (status);
 CREATE INDEX idx_login_time ON node_status (login_time);
 CREATE INDEX idx_last_active_time ON node_status (last_active_time);
 CREATE INDEX idx_last_avail_time ON node_status (last_avail_time);
+
+DROP TABLE IF EXISTS `domain_nodes`;
+CREATE TABLE `domain_nodes` (
+  `domain` varchar NOT NULL,
+  `node_id` varchar UNIQUE NOT NULL,
+  PRIMARY KEY (`domain`, `node_id`)
+);

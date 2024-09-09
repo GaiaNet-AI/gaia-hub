@@ -1,15 +1,13 @@
 #!/bin/bash
 
 # Create a directory for the SQLite database
-mkdir -p $(pwd)/data
+mkdir -p $(pwd)/data/sqlite
 
 # Create a Dockerfile
 cat << EOF > Dockerfile
 FROM alpine:latest
 
 RUN apk add --no-cache sqlite
-
-WORKDIR /data
 
 CMD ["/bin/sh"]
 EOF
@@ -21,7 +19,7 @@ rm Dockerfile
 
 # Function to run SQLite commands
 run_sqlite() {
-    docker run --rm -it -v "$(pwd)/data:/data" sqlite3-alpine sqlite3 /data/gaia-domain.db "$@"
+    docker run --rm -it -v "$(pwd)/data/sqlite:/data/sqlite" sqlite3-alpine sqlite3 /data/sqlite/gaia-domain.db "$@"
 }
 
 # SQL commands
@@ -68,8 +66,14 @@ CREATE INDEX idx_login_time ON node_status (login_time);
 CREATE INDEX idx_last_active_time ON node_status (last_active_time);
 CREATE INDEX idx_last_avail_time ON node_status (last_avail_time);
 
+CREATE TABLE domain_nodes (
+  domain varchar NOT NULL,
+  node_id varchar UNIQUE NOT NULL,
+  PRIMARY KEY (domain, node_id)
+);
+
 EOF
 )"
 
 
-echo "Database initialized in ./data/gaia-domain.db"
+echo "Database initialized in ./data/sqlite/gaia-domain.db"

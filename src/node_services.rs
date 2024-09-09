@@ -55,7 +55,9 @@ async fn node_health_handler(
                     // Reopen the avail node
                     // while frpc is connected by checking last_active_time
                     let active_after = now
-                        .checked_sub_signed(chrono::Duration::seconds(crate::NODE_LIVING_DURATION))
+                        .checked_sub_signed(chrono::Duration::seconds(
+                            crate::NODE_LIVING_DURATION as i64,
+                        ))
                         .unwrap();
                     if node.last_active_time > active_after.and_utc().timestamp() {
                         update_node_avail_time_and_status(&node_id, &now, NODE_STATUS_ONLINE)?;

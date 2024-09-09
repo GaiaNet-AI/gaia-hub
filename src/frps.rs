@@ -10,15 +10,13 @@ use crate::db::*;
 use gaia_hub::*;
 use serde_json::Value;
 
-extern crate hyper;
-
 use lazy_static::lazy_static;
 
 use regex::Regex;
 
 lazy_static! {
     pub(crate) static ref FRPS_PATH_RE: Regex =
-        Regex::new(r"^/handler(?:/(?<id>frps_\d+))?$").unwrap();
+        Regex::new(r"^/inner/frps(?:/(?<id>frps_\d+))?$").unwrap();
 }
 
 fn process_json_data_and_build_response(data: serde_json::Value) -> Result<Response<BoxBody>> {
@@ -154,6 +152,7 @@ async fn handler_inner(frps_id: Option<&str>, data: &serde_json::Value) -> Resul
         let version = device.version.clone();
 
         let node = query_node_by_node_id(node_id)?;
+        let mut node_online = false;
         match node {
             // Only handle the offline node cause the 'already exists' node will also send 'NewProxy' event
             Some(node) if node.status == NODE_STATUS_OFFLINE => {
@@ -171,6 +170,7 @@ async fn handler_inner(frps_id: Option<&str>, data: &serde_json::Value) -> Resul
                     NODE_STATUS_ONLINE,
                     &metas,
                 )?;
+                node_online = true;
             }
             None => {
                 let _node_status = create_node_status(
@@ -187,10 +187,24 @@ async fn handler_inner(frps_id: Option<&str>, data: &serde_json::Value) -> Resul
                     NODE_STATUS_ONLINE,
                     &metas,
                 );
+                node_online = true;
             }
             _ => {
                 // Ignore if node is online
                 // Ignore other Err
+            }
+        }
+        if node_online {
+            // If the node has joined some domain, add it to the redis
+            if let Some(domain_node) = query_domain_node_by_node_id(node_id)? {
+                let domain = domain_node.domain.as_str();
+                if let Err(e) = crate::redism::nodes_join(domain, vec![node_id]) {
+                    log::error!(
+                        "Failed to join domain nodes in redis: {}. Error msg: {}",
+                        domain,
+                        e
+                    );
+                }
             }
         }
     } else if op == "CloseProxy" {
@@ -215,6 +229,19 @@ async fn handler_inner(frps_id: Option<&str>, data: &serde_json::Value) -> Resul
         let last_active_time = chrono::Local::now().naive_local();
 
         update_node_status(device_id, subdomain, &last_active_time, NODE_STATUS_OFFLINE)?;
+        if let Some(node) = query_node_by_subdomain(subdomain)? {
+            // If the node has joined some domain, remove it to the redis
+            if let Some(domain_node) = query_domain_node_by_node_id(&node.node_id)? {
+                let domain = domain_node.domain.as_str();
+                if let Err(e) = crate::redism::node_lefts(domain, &node.node_id) {
+                    log::error!(
+                        "Failed to leave domain nodes in redis: {}. Error msg: {}",
+                        domain,
+                        e
+                    );
+                }
+            }
+        }
     } else if op == "Ping" {
         let content = &data["content"];
         let metas = &content["user"]["metas"];

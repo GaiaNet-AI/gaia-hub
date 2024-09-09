@@ -14,6 +14,7 @@ docker build -t gaia-hub .
 cat <<EOF > .env
 LOG_FILE=/logs/gaia-hub.log
 DATABASE_URL=/data/gaia-domain.db
+REDIS_URL=redis://:@redis:6379/0
 SERVER_HOST=0.0.0.0
 SERVER_PORT=1337
 DB_POOL_SIZE=20

@@ -1,5 +1,4 @@
-use crate::schema::devices;
-use crate::schema::node_status;
+use crate::schema::*;
 use diesel::prelude::*;
 
 use serde::Serialize;
@@ -94,4 +93,12 @@ pub struct Device {
     pub meta: String,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+#[derive(Serialize, Insertable, AsChangeset, Queryable, Selectable)]
+#[diesel(table_name = crate::schema::domain_nodes)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct DomainNodes {
+    pub domain: String,
+    pub node_id: String,
 }
