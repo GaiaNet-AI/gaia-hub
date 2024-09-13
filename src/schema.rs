@@ -41,5 +41,8 @@ diesel::table! {
     domain_nodes (domain, node_id) {
         domain -> Varchar,
         node_id -> Varchar,
+        weight -> Int8,
     }
 }
+
+diesel::allow_tables_to_appear_in_same_query!(domain_nodes, node_status);

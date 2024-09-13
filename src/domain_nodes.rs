@@ -13,7 +13,19 @@ lazy_static! {
 }
 
 #[derive(Debug, serde::Deserialize)]
-struct DomainNode {
+struct NodeWeight {
+    node_id: String,
+    weight: i64,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct DomainNodesWeights {
+    domain: String,
+    nodes_weights: Vec<NodeWeight>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct DomainNodes {
     domain: String,
     nodes_ids: Vec<String>,
 }
@@ -35,7 +47,7 @@ struct CreateResult {
 
 pub async fn create_domain_node(req: Request<IncomingBody>) -> Result<Response<BoxBody>> {
     let whole_body = req.collect().await?.aggregate();
-    let domain_nodes: Vec<DomainNode> = match serde_json::from_reader(whole_body.reader()) {
+    let domain_nodes: Vec<DomainNodesWeights> = match serde_json::from_reader(whole_body.reader()) {
         Ok(data) => data,
         Err(e) => {
             return Ok(Response::builder()
@@ -54,25 +66,36 @@ pub async fn create_domain_node(req: Request<IncomingBody>) -> Result<Response<B
         // domain must be lowercase
         let domain = domain.to_lowercase();
 
-        let nodes_ids = domain_node.nodes_ids;
+        let nodes_weights = domain_node.nodes_weights;
 
-        for node_id in nodes_ids {
+        for node_weight in nodes_weights {
             let r = CreateResult {
                 domain: domain.clone(),
-                node_id: node_id.clone(),
+                node_id: node_weight.node_id.clone(),
                 code: CreateResultCode::Created,
             };
             results.push(r);
             let l = results.len();
             let r = results.get_mut(l - 1).unwrap();
 
-            let domain_node = query_domain_node(&domain, &node_id)?;
+            let domain_node = query_domain_node(&domain, &node_weight.node_id)?;
 
             if domain_node.is_some() {
+                if domain_node.unwrap().weight != node_weight.weight {
+                    let updated =
+                        update_domain_node(&domain, &node_weight.node_id, node_weight.weight)?;
+                    if updated > 0 {
+                        crate::redism::nodes_upjoin(
+                            &domain,
+                            &node_weight.node_id,
+                            node_weight.weight,
+                        )?;
+                    }
+                }
                 continue;
             }
 
-            let node = query_node_by_node_id(&node_id)?;
+            let node = query_node_by_node_id(&node_weight.node_id)?;
 
             // Only online nodes can be added to domain
             if node.is_none() {
@@ -84,9 +107,9 @@ pub async fn create_domain_node(req: Request<IncomingBody>) -> Result<Response<B
                 continue;
             }
 
-            let inserted = insert_domain_node(&domain, &node_id)?;
+            let inserted = insert_domain_node(&domain, &node_weight.node_id, node_weight.weight)?;
             if inserted > 0 {
-                crate::redism::nodes_join(&domain, vec![&node_id])?;
+                crate::redism::nodes_join(&domain, &node_weight.node_id, node_weight.weight)?;
             }
         }
     }
@@ -126,7 +149,7 @@ pub async fn get_domain_nodes(req: Request<IncomingBody>) -> Result<Response<Box
 
 pub async fn remove_domain_node(req: Request<IncomingBody>) -> Result<Response<BoxBody>> {
     let whole_body = req.collect().await?.aggregate();
-    let domain_nodes: Vec<DomainNode> = match serde_json::from_reader(whole_body.reader()) {
+    let domain_nodes: Vec<DomainNodes> = match serde_json::from_reader(whole_body.reader()) {
         Ok(data) => data,
         Err(e) => {
             return Ok(Response::builder()
@@ -146,9 +169,8 @@ pub async fn remove_domain_node(req: Request<IncomingBody>) -> Result<Response<B
         let nodes_ids = domain_node.nodes_ids;
 
         for node_id in nodes_ids {
-            let deleted = delete_domain_node(&domain, &node_id)?;
-            if deleted > 0 {
-                crate::redism::node_lefts(&domain, &node_id)?;
+            if let Some(deleted) = delete_domain_node(&domain, &node_id)? {
+                crate::redism::node_lefts(&domain, &node_id, deleted.weight)?;
             }
         }
     }

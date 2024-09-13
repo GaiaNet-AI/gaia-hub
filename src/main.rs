@@ -78,8 +78,8 @@ async fn cross_compare_domain_nodes(_now: NaiveDateTime) {
         let nodes_by_redis = redism::get_domain_nodes(&domain).unwrap();
         for node in nodes.iter() {
             if !nodes_by_redis.contains(&node) {
-                log::error!("Node {} not found in redis for domain {}", node, domain);
-                if let Err(e) = redism::nodes_join(&domain, vec![&node]) {
+                log::error!("Node {} not found in redis for domain {}", node.0, domain);
+                if let Err(e) = redism::nodes_join(&domain, &node.0, node.1) {
                     log::error!(
                         "Failed to add domain node to redis: {}. Error msg: {}",
                         domain,
@@ -90,8 +90,8 @@ async fn cross_compare_domain_nodes(_now: NaiveDateTime) {
         }
         for node in nodes_by_redis.iter() {
             if !nodes.contains(&node) {
-                log::error!("Node {} not found in db for domain {}", node, domain);
-                if let Err(e) = redism::node_lefts(&domain, &node) {
+                log::error!("Node {} not found in db for domain {}", node.0, domain);
+                if let Err(e) = redism::node_lefts(&domain, &node.0, node.1) {
                     log::error!(
                         "Failed to del domain node in redis: {}. Error msg: {}",
                         domain,

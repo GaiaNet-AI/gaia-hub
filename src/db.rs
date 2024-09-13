@@ -419,17 +419,29 @@ pub fn query_living_nodes(
         .load::<models::LivingNode>(&mut conn)?)
 }
 
-pub fn insert_domain_node(domain: &str, node_id: &str) -> Result<usize> {
+pub fn insert_domain_node(domain: &str, node_id: &str, weight: i64) -> Result<usize> {
     use crate::schema::domain_nodes;
     let _domain_node = models::DomainNodes {
         domain: domain.to_string(),
         node_id: node_id.to_string(),
+        weight,
     };
 
     let mut conn = establish_connection()?;
 
     Ok(diesel::insert_into(domain_nodes::table)
         .values(&_domain_node)
+        .execute(&mut conn)?)
+}
+
+pub fn update_domain_node(domain: &str, node_id: &str, weight: i64) -> Result<usize> {
+    use crate::schema::domain_nodes;
+    let mut conn = establish_connection()?;
+
+    Ok(diesel::update(domain_nodes::table)
+        .filter(domain_nodes::domain.eq(domain))
+        .filter(domain_nodes::node_id.eq(node_id))
+        .set((domain_nodes::weight.eq(weight),))
         .execute(&mut conn)?)
 }
 
@@ -462,11 +474,17 @@ pub fn query_domain_node_by_node_id(node_id: &str) -> Result<Option<models::Doma
     }
 }
 
-pub fn delete_domain_node(domain: &str, node_id: &str) -> Result<usize> {
+pub fn delete_domain_node(domain: &str, node_id: &str) -> Result<Option<models::DomainNodes>> {
     use crate::schema::domain_nodes::dsl::{domain as d, domain_nodes, node_id as ni};
     let mut conn = establish_connection()?;
     let query = domain_nodes.filter(d.eq(domain)).filter(ni.eq(node_id));
-    Ok(diesel::delete(query).execute(&mut conn)?)
+    let dn = match query.first::<models::DomainNodes>(&mut conn) {
+        Ok(node) => node,
+        Err(diesel::NotFound) => return Ok(None),
+        Err(e) => return Err(e.into()),
+    };
+    diesel::delete(query).execute(&mut conn)?;
+    Ok(Some(dn))
 }
 
 pub fn get_distinct_domains() -> Result<Vec<String>> {
@@ -478,11 +496,14 @@ pub fn get_distinct_domains() -> Result<Vec<String>> {
         .load::<String>(&mut conn)?)
 }
 
-pub fn get_nodes_by_domain(domain: &str) -> Result<Vec<String>> {
-    use crate::schema::domain_nodes::dsl::{domain as d, domain_nodes, node_id};
+pub fn get_nodes_by_domain(domain: &str) -> Result<Vec<(String, i64)>> {
+    use crate::schema::domain_nodes::dsl::{domain as d, domain_nodes, node_id as dni, weight};
+    use crate::schema::node_status::dsl::{node_id as nid, node_status, status};
     let mut conn = establish_connection()?;
     Ok(domain_nodes
+        .inner_join(node_status.on(nid.eq(dni)))
         .filter(d.eq(domain))
-        .select(node_id)
-        .load::<String>(&mut conn)?)
+        .filter(status.eq(NODE_STATUS_ONLINE))
+        .select((dni, weight))
+        .load::<(String, i64)>(&mut conn)?)
 }

@@ -69,6 +69,7 @@ CREATE INDEX idx_last_avail_time ON node_status (last_avail_time);
 CREATE TABLE domain_nodes (
   domain varchar NOT NULL,
   node_id varchar UNIQUE NOT NULL,
+  weight integer NOT NULL,
   PRIMARY KEY (domain, node_id)
 );
 

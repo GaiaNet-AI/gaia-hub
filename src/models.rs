@@ -101,4 +101,5 @@ pub struct Device {
 pub struct DomainNodes {
     pub domain: String,
     pub node_id: String,
+    pub weight: i64,
 }

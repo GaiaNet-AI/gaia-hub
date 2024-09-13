@@ -198,7 +198,7 @@ async fn handler_inner(frps_id: Option<&str>, data: &serde_json::Value) -> Resul
             // If the node has joined some domain, add it to the redis
             if let Some(domain_node) = query_domain_node_by_node_id(node_id)? {
                 let domain = domain_node.domain.as_str();
-                if let Err(e) = crate::redism::nodes_join(domain, vec![node_id]) {
+                if let Err(e) = crate::redism::nodes_upjoin(domain, node_id, domain_node.weight) {
                     log::error!(
                         "Failed to join domain nodes in redis: {}. Error msg: {}",
                         domain,
@@ -233,7 +233,8 @@ async fn handler_inner(frps_id: Option<&str>, data: &serde_json::Value) -> Resul
             // If the node has joined some domain, remove it to the redis
             if let Some(domain_node) = query_domain_node_by_node_id(&node.node_id)? {
                 let domain = domain_node.domain.as_str();
-                if let Err(e) = crate::redism::node_lefts(domain, &node.node_id) {
+                if let Err(e) = crate::redism::node_lefts(domain, &node.node_id, domain_node.weight)
+                {
                     log::error!(
                         "Failed to leave domain nodes in redis: {}. Error msg: {}",
                         domain,
