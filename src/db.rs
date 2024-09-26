@@ -219,7 +219,11 @@ pub fn update_online_node_last_active_time(
 
     Ok(
         diesel::update(node_status::table.filter(node_status::device_id.eq(device_id)))
-            .filter(node_status::status.eq(NODE_STATUS_ONLINE))
+            .filter(
+                node_status::status
+                    .eq(NODE_STATUS_ONLINE)
+                    .or(node_status::status.eq(NODE_STATUS_UNAVAIL)),
+            )
             .set((node_status::last_active_time.eq(last_active_time.and_utc().timestamp()),))
             .execute(&mut conn)?,
     )
@@ -263,13 +267,13 @@ pub fn update_node_avail_time_and_status(
     )
 }
 
-pub fn close_unavail_node(node_id: &str) -> Result<usize> {
+pub fn unavail_node(node_id: &str) -> Result<usize> {
     let mut conn = establish_connection()?;
     use crate::schema::node_status;
 
     Ok(
         diesel::update(node_status::table.filter(node_status::node_id.eq(node_id)))
-            .set((node_status::status.eq(NODE_STATUS_OFFLINE),))
+            .set((node_status::status.eq(NODE_STATUS_UNAVAIL),))
             .execute(&mut conn)?,
     )
 }
@@ -326,13 +330,21 @@ pub fn close_expired_nodes(seconds_before: &chrono::NaiveDateTime) -> Result<usi
     use crate::schema::node_status;
 
     Ok(diesel::update(node_status::table)
-        .filter(
-            node_status::last_active_time
-                .lt(seconds_before.and_utc().timestamp())
-                .or(node_status::last_avail_time.lt(seconds_before.and_utc().timestamp())),
-        )
+        .filter(node_status::last_active_time.lt(seconds_before.and_utc().timestamp()))
         .filter(node_status::status.eq(NODE_STATUS_ONLINE))
         .set((node_status::status.eq(NODE_STATUS_OFFLINE),))
+        .execute(&mut conn)?)
+}
+
+// Update node_status table, set status to unavail if the last_avail_time is before given time
+pub fn unavail_expired_nodes(seconds_before: &chrono::NaiveDateTime) -> Result<usize> {
+    let mut conn = establish_connection()?;
+    use crate::schema::node_status;
+
+    Ok(diesel::update(node_status::table)
+        .filter(node_status::last_avail_time.lt(seconds_before.and_utc().timestamp()))
+        .filter(node_status::status.eq(NODE_STATUS_ONLINE))
+        .set((node_status::status.eq(NODE_STATUS_UNAVAIL),))
         .execute(&mut conn)?)
 }
 
@@ -506,4 +518,30 @@ pub fn get_nodes_by_domain(domain: &str) -> Result<Vec<(String, i64)>> {
         .filter(status.eq(NODE_STATUS_ONLINE))
         .select((dni, weight))
         .load::<(String, i64)>(&mut conn)?)
+}
+
+pub fn query_living_nodes_by_login_time(
+    lived_secs: u64,
+    page_size: i64,
+    earliest_login_time: i64,
+) -> Result<Vec<models::LivingNode>> {
+    use crate::schema::node_status::dsl::*;
+    let mut conn = establish_connection()?;
+
+    let mut query = node_status.into_boxed();
+
+    query = query.filter(status.eq(NODE_STATUS_ONLINE));
+
+    query = query.filter(login_time.gt(earliest_login_time));
+
+    query = query.filter(sql::<Bool>(&format!(
+        "TIMESTAMPDIFF(SECOND, login_time, last_active_time) >= {}",
+        lived_secs
+    )));
+
+    Ok(query
+        .order(login_time.asc())
+        .limit(page_size)
+        .select(models::LivingNode::as_select())
+        .load::<models::LivingNode>(&mut conn)?)
 }

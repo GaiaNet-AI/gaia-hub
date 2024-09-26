@@ -48,6 +48,8 @@ pub struct NodeLimited {
 pub struct LivingNode {
     pub node_id: String,
     pub subdomain: String,
+    pub chat_model: String,
+    pub login_time: i64,
 }
 
 #[derive(Serialize, Insertable, AsChangeset)]

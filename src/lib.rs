@@ -3,6 +3,7 @@ use http_body_util::{BodyExt, Full};
 
 pub static NODE_STATUS_ONLINE: &str = "online";
 pub static NODE_STATUS_OFFLINE: &str = "offline";
+pub static NODE_STATUS_UNAVAIL: &str = "unavail";
 
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 pub type Result<T> = std::result::Result<T, GenericError>;

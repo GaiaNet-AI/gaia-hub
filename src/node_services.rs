@@ -47,11 +47,11 @@ async fn node_health_handler(
     match node {
         Some(node) => match health {
             true => {
-                let now = chrono::Local::now().naive_local();
+                let now = chrono::Utc::now().naive_utc();
                 if node.status == NODE_STATUS_ONLINE {
                     // Update the last avail time
                     update_node_avail_time_and_status(&node_id, &now, NODE_STATUS_ONLINE)?;
-                } else {
+                } else if node.status == NODE_STATUS_UNAVAIL {
                     // Reopen the avail node
                     // while frpc is connected by checking last_active_time
                     let active_after = now
@@ -67,7 +67,7 @@ async fn node_health_handler(
             false => {
                 if node.status == NODE_STATUS_ONLINE {
                     // Close the node
-                    close_unavail_node(&node_id)?;
+                    unavail_node(&node_id)?;
                 }
             }
         },

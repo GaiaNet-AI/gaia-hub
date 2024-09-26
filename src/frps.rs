@@ -86,7 +86,7 @@ async fn handler_inner(frps_id: Option<&str>, data: &serde_json::Value) -> Resul
             ))?,
         };
 
-        let login_time = chrono::Local::now().naive_local();
+        let login_time = chrono::Utc::now().naive_utc();
 
         let count = count_device_by_device_id(device_id)?;
         if count == 0 {
@@ -135,7 +135,7 @@ async fn handler_inner(frps_id: Option<&str>, data: &serde_json::Value) -> Resul
             }
         }
 
-        let now = chrono::Local::now().naive_local();
+        let now = chrono::Utc::now().naive_utc();
 
         let devices = query_device_by_device_id(device_id)?;
 
@@ -226,7 +226,7 @@ async fn handler_inner(frps_id: Option<&str>, data: &serde_json::Value) -> Resul
             }
         }
 
-        let last_active_time = chrono::Local::now().naive_local();
+        let last_active_time = chrono::Utc::now().naive_utc();
 
         update_node_status(device_id, subdomain, &last_active_time, NODE_STATUS_OFFLINE)?;
         if let Some(node) = query_node_by_subdomain(subdomain)? {
@@ -253,10 +253,10 @@ async fn handler_inner(frps_id: Option<&str>, data: &serde_json::Value) -> Resul
         if device_id.is_empty() {
             Err("Device ID is empty")?
         }
-        let last_active_time = chrono::Local::now().naive_local();
+        let last_active_time = chrono::Utc::now().naive_utc();
 
         // The 'Ping' event only contain device_id but without subdomain
-        // Only update the online node by device_id cause there may be multiple nodes with the same device_id
+        // Only update the online or unavail node by device_id cause there may be multiple nodes with the same device_id
         update_online_node_last_active_time(device_id, &last_active_time)?;
     }
 
