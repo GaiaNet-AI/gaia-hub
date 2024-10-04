@@ -19,7 +19,7 @@ rm Dockerfile
 
 # Function to run SQLite commands
 run_sqlite() {
-    docker run --rm -it -v "$(pwd)/data/sqlite:/data/sqlite" sqlite3-alpine sqlite3 /data/sqlite/gaia-domain.db "$@"
+    docker run --rm -v "$(pwd)/data/sqlite:/data/sqlite" sqlite3-alpine sqlite3 /data/sqlite/gaia-domain.db "$@"
 }
 
 # SQL commands
