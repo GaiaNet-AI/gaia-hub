@@ -229,7 +229,7 @@ pub fn update_online_node_last_active_time(
     )
 }
 
-pub fn update_node_status(
+pub fn update_node_active_status(
     device_id: &str,
     subdomain: &str,
     last_active_time: &chrono::NaiveDateTime,
@@ -267,13 +267,13 @@ pub fn update_node_avail_time_and_status(
     )
 }
 
-pub fn unavail_node(node_id: &str) -> Result<usize> {
+pub fn update_node_status(node_id: &str, status: &str) -> Result<usize> {
     let mut conn = establish_connection()?;
     use crate::schema::node_status;
 
     Ok(
         diesel::update(node_status::table.filter(node_status::node_id.eq(node_id)))
-            .set((node_status::status.eq(NODE_STATUS_UNAVAIL),))
+            .set((node_status::status.eq(status),))
             .execute(&mut conn)?,
     )
 }
@@ -530,7 +530,11 @@ pub fn query_living_nodes_by_login_time(
 
     let mut query = node_status.into_boxed();
 
-    query = query.filter(status.eq(NODE_STATUS_ONLINE));
+    query = query.filter(
+        status
+            .eq(NODE_STATUS_ONLINE)
+            .or(status.eq(NODE_STATUS_UNAVAIL)),
+    );
 
     query = query.filter(login_time.gt(earliest_login_time));
 

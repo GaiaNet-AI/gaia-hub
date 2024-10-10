@@ -66,8 +66,8 @@ async fn node_health_handler(
             }
             false => {
                 if node.status == NODE_STATUS_ONLINE {
-                    // Close the node
-                    unavail_node(&node_id)?;
+                    // Unavail the node
+                    update_node_status(&node_id, NODE_STATUS_UNAVAIL)?;
                 }
             }
         },

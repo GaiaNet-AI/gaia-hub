@@ -91,7 +91,7 @@ async fn check_nodes_health(_now: NaiveDateTime) {
     let page_size = 100;
     let request_timeout_secs = 5;
     // Limit the number of concurrent tasks
-    let semaphore = Arc::new(Semaphore::new(10));
+    let semaphore = Arc::new(Semaphore::new(50));
 
     loop {
         let nodes =
@@ -115,9 +115,12 @@ async fn check_nodes_health(_now: NaiveDateTime) {
             tokio::spawn(async move {
                 // Perform health check for the node
                 let is_healthy = determine_node_avail(&node, request_timeout_secs).await;
-                if !is_healthy {
+                if !is_healthy && node.status == NODE_STATUS_ONLINE {
                     log::info!("Make node {} unavail because it is unhealthy", node.node_id);
-                    let _ = db::unavail_node(&node.node_id);
+                    let _ = db::update_node_status(&node.node_id, NODE_STATUS_UNAVAIL);
+                } else if is_healthy && node.status == NODE_STATUS_UNAVAIL {
+                    log::info!("Make node {} avail because it is healthy", node.node_id);
+                    let _ = db::update_node_status(&node.node_id, NODE_STATUS_ONLINE);
                 }
                 // Release the permit after the task is done
                 drop(permit);

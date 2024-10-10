@@ -228,7 +228,7 @@ async fn handler_inner(frps_id: Option<&str>, data: &serde_json::Value) -> Resul
 
         let last_active_time = chrono::Utc::now().naive_utc();
 
-        update_node_status(device_id, subdomain, &last_active_time, NODE_STATUS_OFFLINE)?;
+        update_node_active_status(device_id, subdomain, &last_active_time, NODE_STATUS_OFFLINE)?;
         if let Some(node) = query_node_by_subdomain(subdomain)? {
             // If the node has joined some domain, remove it to the redis
             if let Some(domain_node) = query_domain_node_by_node_id(&node.node_id)? {

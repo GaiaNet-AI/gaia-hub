@@ -50,6 +50,7 @@ pub struct LivingNode {
     pub subdomain: String,
     pub chat_model: String,
     pub login_time: i64,
+    pub status: String,
 }
 
 #[derive(Serialize, Insertable, AsChangeset)]
