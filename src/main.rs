@@ -42,7 +42,7 @@ async fn health(_req: Request<IncomingBody>) -> Result<Response<BoxBody>> {
 async fn routers(req: Request<IncomingBody>) -> Result<Response<BoxBody>> {
     let response = match (req.method(), req.uri().path()) {
         (&Method::POST, path) if FRPS_PATH_RE.is_match(path) => handler(req).await,
-        (&Method::POST, path) if NODE_API_PATH_RE.is_match(path) => node_api_handler(req).await,
+        (&Method::POST, path) if DEVICE_API_PATH_RE.is_match(path) => device_api_handler(req).await,
         (&Method::GET, "/inner/nodes") => query_nodes(req).await,
         (&Method::GET, "/inner/living_nodes") => get_living_nodes(req).await,
         (&Method::GET, "/health-check") => health(req).await,

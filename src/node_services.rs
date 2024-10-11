@@ -9,48 +9,49 @@ use regex::Regex;
 use crate::db::*;
 
 lazy_static! {
-    pub(crate) static ref NODE_API_PATH_RE: Regex =
-        Regex::new(r"^/(?<path>(?:node-info)|(?:node-health))/(?<node_id>[\w\.\-]+)?$").unwrap();
+    pub(crate) static ref DEVICE_API_PATH_RE: Regex =
+        Regex::new(r"^/(?<path>(?:device-info)|(?:device-health))/(?<device_id>[\w\.\-]+)?$")
+            .unwrap();
 }
 
-pub async fn node_api_handler(req: Request<IncomingBody>) -> Result<Response<BoxBody>> {
-    let captures = NODE_API_PATH_RE
+pub async fn device_api_handler(req: Request<IncomingBody>) -> Result<Response<BoxBody>> {
+    let captures = DEVICE_API_PATH_RE
         .captures(req.uri().path())
         .ok_or("Invalid path")?;
     let path = captures.name("path").and_then(|m| Some(m.as_str()));
-    let node_id = captures.name("node_id").and_then(|m| Some(m.as_str()));
+    let device_id = captures.name("device_id").and_then(|m| Some(m.as_str()));
 
-    let node_id = node_id.ok_or("Invalid node_id")?.to_string();
+    let device_id = device_id.ok_or("Invalid device_id")?.to_string();
 
     match path {
-        Some("node-info") => node_info_handler(node_id, req).await,
-        Some("node-health") => node_health_handler(node_id, req).await,
+        Some("device-info") => device_info_handler(device_id, req).await,
+        Some("device-health") => device_health_handler(device_id, req).await,
         _ => Err("Invalid path".into()),
     }
 }
 
-async fn node_health_handler(
-    node_id: String,
+async fn device_health_handler(
+    device_id: String,
     req: Request<IncomingBody>,
 ) -> Result<Response<BoxBody>> {
     // Aggregate the body...
     let whole_body = req.collect().await?.aggregate();
 
     // Decode as JSON...
-    let node_health: serde_json::Value = serde_json::from_reader(whole_body.reader())?;
+    let device_health: serde_json::Value = serde_json::from_reader(whole_body.reader())?;
 
-    let health = node_health["health"]
+    let health = device_health["health"]
         .as_bool()
         .ok_or("No health attribute")?;
 
-    let node = query_node_by_node_id(&node_id)?;
-    match node {
-        Some(node) => match health {
-            true => {
-                let now = chrono::Utc::now().naive_utc();
+    let nodes = query_nodes_by_device_id(&device_id)?;
+    match health {
+        true => {
+            let now = chrono::Utc::now().naive_utc();
+            for node in nodes {
                 if node.status == NODE_STATUS_ONLINE {
                     // Update the last avail time
-                    update_node_avail_time_and_status(&node_id, &now, NODE_STATUS_ONLINE)?;
+                    update_node_avail_time_and_status(&node.node_id, &now, NODE_STATUS_ONLINE)?;
                 } else if node.status == NODE_STATUS_UNAVAIL {
                     // Reopen the avail node
                     // while frpc is connected by checking last_active_time
@@ -60,27 +61,22 @@ async fn node_health_handler(
                         ))
                         .unwrap();
                     if node.last_active_time > active_after.and_utc().timestamp() {
-                        update_node_avail_time_and_status(&node_id, &now, NODE_STATUS_ONLINE)?;
+                        update_node_avail_time_and_status(&node.node_id, &now, NODE_STATUS_ONLINE)?;
                     }
                 }
             }
-            false => {
-                if node.status == NODE_STATUS_ONLINE {
-                    // Unavail the node
-                    update_node_status(&node_id, NODE_STATUS_UNAVAIL)?;
-                }
-            }
-        },
-        None => {
-            return Err("Node status not found".into());
+        }
+        false => {
+            // Unavail the nodes of device
+            update_nodes_status_by_device_id(&device_id, NODE_STATUS_UNAVAIL)?;
         }
     }
 
     Ok(Response::new(crate::full(Bytes::from_static(b"ok"))))
 }
 
-async fn node_info_handler(
-    node_id: String,
+async fn device_info_handler(
+    device_id: String,
     req: Request<IncomingBody>,
 ) -> Result<Response<BoxBody>> {
     // Aggregate the body...
@@ -102,15 +98,15 @@ async fn node_info_handler(
         .ok_or("Missing embedding_model in node info")?
         .to_string();
 
-    update_node_info(
-        &node_id,
+    update_nodes_info_by_device_id(
+        &device_id,
         &node_version,
         &chat_model_name,
         &embedding_model_name,
     )?;
     log::info!(
-        "Updated node info for {}: node_version: {}, chat model name: {}, embedding model name: {}",
-        node_id,
+        "Updated nodes info of device {}: node_version: {}, chat model name: {}, embedding model name: {}",
+        device_id,
         node_version,
         chat_model_name,
         embedding_model_name

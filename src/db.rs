@@ -278,8 +278,19 @@ pub fn update_node_status(node_id: &str, status: &str) -> Result<usize> {
     )
 }
 
-pub fn update_node_info(
-    node_id: &str,
+pub fn update_nodes_status_by_device_id(device_id: &str, status: &str) -> Result<usize> {
+    let mut conn = establish_connection()?;
+    use crate::schema::node_status;
+
+    Ok(
+        diesel::update(node_status::table.filter(node_status::device_id.eq(device_id)))
+            .set((node_status::status.eq(status),))
+            .execute(&mut conn)?,
+    )
+}
+
+pub fn update_nodes_info_by_device_id(
+    device_id: &str,
     node_version: &str,
     chat_model: &str,
     embedding_model_name: &str,
@@ -288,7 +299,7 @@ pub fn update_node_info(
     use crate::schema::node_status;
 
     Ok(
-        diesel::update(node_status::table.filter(node_status::node_id.eq(node_id)))
+        diesel::update(node_status::table.filter(node_status::device_id.eq(device_id)))
             .set((
                 node_status::node_version.eq(node_version),
                 node_status::chat_model.eq(chat_model),
@@ -309,6 +320,15 @@ pub fn query_node_by_node_id(node_id: &str) -> Result<Option<models::Node>> {
         Err(diesel::NotFound) => Ok(None),
         Err(e) => Err(e.into()),
     }
+}
+
+pub fn query_nodes_by_device_id(device_id: &str) -> Result<Vec<models::Node>> {
+    let mut conn = establish_connection()?;
+    use crate::schema::node_status::dsl::{device_id as di, node_status};
+    let nodes = node_status
+        .filter(di.eq(device_id))
+        .load::<models::Node>(&mut conn)?;
+    Ok(nodes)
 }
 
 pub fn query_node_by_subdomain(subdomain: &str) -> Result<Option<models::Node>> {
