@@ -164,7 +164,10 @@ async fn handler_inner(frps_id: Option<&str>, data: &serde_json::Value) -> Resul
                     &arch,
                     &os,
                     &client_address,
+                    #[cfg(feature = "sqlite")]
                     &chrono::NaiveDateTime::from_timestamp(last_login_time, 0),
+                    #[cfg(feature = "mysql")]
+                    &last_login_time,
                     &now,
                     run_id,
                     NODE_STATUS_ONLINE,
@@ -181,7 +184,10 @@ async fn handler_inner(frps_id: Option<&str>, data: &serde_json::Value) -> Resul
                     &arch,
                     &os,
                     &client_address,
+                    #[cfg(feature = "sqlite")]
                     &chrono::NaiveDateTime::from_timestamp(last_login_time, 0),
+                    #[cfg(feature = "mysql")]
+                    &last_login_time,
                     &now,
                     run_id,
                     NODE_STATUS_ONLINE,

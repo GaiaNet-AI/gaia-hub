@@ -1,31 +1,43 @@
-use diesel::connection::SimpleConnection;
 use diesel::dsl::sql;
 use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager};
 use diesel::sql_types::Bool;
-use diesel::SqliteConnection;
 use lazy_static::lazy_static;
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::env;
 use std::sync::Mutex;
+
+#[cfg(feature = "mysql")]
+use diesel::MysqlConnection;
+#[cfg(feature = "sqlite")]
+use diesel::SqliteConnection;
+
+#[cfg(feature = "sqlite")]
+use diesel::connection::SimpleConnection;
+#[cfg(feature = "sqlite")]
 use std::time::Duration;
 
 use gaia_hub::*;
 
 use crate::models;
 
+#[cfg(feature = "sqlite")]
 type Pool = r2d2::Pool<ConnectionManager<SqliteConnection>>;
+#[cfg(feature = "mysql")]
+type Pool = r2d2::Pool<ConnectionManager<MysqlConnection>>;
 
 // To prevent error: database is locked
 // https://stackoverflow.com/questions/57123453/how-to-use-diesel-with-sqlite-connections-and-avoid-database-is-locked-type-of
 #[derive(Debug)]
+#[cfg(feature = "sqlite")]
 pub struct ConnectionOptions {
     pub enable_wal: bool,
     pub enable_foreign_keys: bool,
     pub busy_timeout: Option<Duration>,
 }
 
+#[cfg(feature = "sqlite")]
 impl diesel::r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error>
     for ConnectionOptions
 {
@@ -60,22 +72,38 @@ lazy_static! {
             .unwrap_or_else(|_| String::from("20"))
             .parse()
             .expect("DB_POOL_MIN_SIZE must be a number");
+
+        #[cfg(feature = "sqlite")]
         let manager = ConnectionManager::<SqliteConnection>::new(database_url);
+        #[cfg(feature = "mysql")]
+        let manager = ConnectionManager::<MysqlConnection>::new(database_url);
+
         let pool = r2d2::Pool::builder()
             .min_idle(Some(db_pool_min_size))
-            .max_size(db_pool_size)
-            .connection_customizer(Box::new(ConnectionOptions {
-                enable_wal: true,
-                enable_foreign_keys: true,
-                busy_timeout: Some(Duration::from_secs(30)),
-            }))
-            .build(manager)
-            .expect("Failed to create pool.");
+            .max_size(db_pool_size);
+
+        #[cfg(feature = "sqlite")]
+        let pool = pool.connection_customizer(Box::new(ConnectionOptions {
+            enable_wal: true,
+            enable_foreign_keys: true,
+            busy_timeout: Some(Duration::from_secs(30)),
+        }));
+
+        let pool = pool.build(manager).expect("Failed to create pool.");
         Mutex::new(pool)
     };
 }
 
+#[cfg(feature = "sqlite")]
 fn establish_connection() -> Result<r2d2::PooledConnection<ConnectionManager<SqliteConnection>>> {
+    let pool = POOL.lock().unwrap();
+    Ok(pool.get().map_err(|e| {
+        log::error!("Failed to fetch db connection: {}", e);
+        e
+    })?)
+}
+#[cfg(feature = "mysql")]
+fn establish_connection() -> Result<r2d2::PooledConnection<ConnectionManager<MysqlConnection>>> {
     let pool = POOL.lock().unwrap();
     Ok(pool.get().map_err(|e| {
         log::error!("Failed to fetch db connection: {}", e);
@@ -99,8 +127,15 @@ pub fn create_device(
         arch,
         version,
         client_address,
+        #[cfg(feature = "sqlite")]
         login_time: &login_time.and_utc().timestamp(),
+        #[cfg(feature = "mysql")]
+        login_time,
+
+        #[cfg(feature = "sqlite")]
         meta: &metas.to_string(),
+        #[cfg(feature = "mysql")]
+        meta: &metas,
     };
 
     let mut conn = establish_connection()?;
@@ -114,9 +149,17 @@ pub fn update_device(device_id: &str, login_time: &chrono::NaiveDateTime) -> Res
     let mut conn = establish_connection()?;
     use crate::schema::devices;
 
-    Ok(
+    #[cfg(feature = "sqlite")]
+    return Ok(
         diesel::update(devices::table.filter(devices::device_id.eq(device_id)))
             .set((devices::login_time.eq(login_time.and_utc().timestamp()),))
+            .execute(&mut conn)?,
+    );
+
+    #[cfg(feature = "mysql")]
+    Ok(
+        diesel::update(devices::table.filter(devices::device_id.eq(device_id)))
+            .set((devices::login_time.eq(login_time),))
             .execute(&mut conn)?,
     )
 }
@@ -162,11 +205,22 @@ pub fn create_node_status(
         arch,
         os,
         client_address,
+        #[cfg(feature = "sqlite")]
         login_time: &login_time.and_utc().timestamp(),
+        #[cfg(feature = "mysql")]
+        login_time,
+
+        #[cfg(feature = "sqlite")]
         last_active_time: &last_active_time.and_utc().timestamp(),
+        #[cfg(feature = "mysql")]
+        last_active_time,
+
         run_id,
         status,
+        #[cfg(feature = "sqlite")]
         meta: &metas.to_string(),
+        #[cfg(feature = "mysql")]
+        meta: &metas,
     };
 
     Ok(diesel::insert_into(node_status::table)
@@ -200,11 +254,20 @@ pub fn update_node_status_more(
                 node_status::arch.eq(arch),
                 node_status::os.eq(os),
                 node_status::client_address.eq(client_address),
+                #[cfg(feature = "sqlite")]
                 node_status::login_time.eq(login_time.and_utc().timestamp()),
+                #[cfg(feature = "mysql")]
+                node_status::login_time.eq(login_time),
+                #[cfg(feature = "sqlite")]
                 node_status::last_active_time.eq(last_active_time.and_utc().timestamp()),
+                #[cfg(feature = "mysql")]
+                node_status::last_active_time.eq(last_active_time),
                 node_status::run_id.eq(run_id),
                 node_status::status.eq(status),
+                #[cfg(feature = "sqlite")]
                 node_status::meta.eq(&metas.to_string()),
+                #[cfg(feature = "mysql")]
+                node_status::meta.eq(&metas),
             ))
             .execute(&mut conn)?,
     )
@@ -224,7 +287,12 @@ pub fn update_online_node_last_active_time(
                     .eq(NODE_STATUS_ONLINE)
                     .or(node_status::status.eq(NODE_STATUS_UNAVAIL)),
             )
-            .set((node_status::last_active_time.eq(last_active_time.and_utc().timestamp()),))
+            .set(
+                #[cfg(feature = "sqlite")]
+                node_status::last_active_time.eq(last_active_time.and_utc().timestamp()),
+                #[cfg(feature = "mysql")]
+                node_status::last_active_time.eq(last_active_time),
+            )
             .execute(&mut conn)?,
     )
 }
@@ -242,7 +310,10 @@ pub fn update_node_active_status(
         diesel::update(node_status::table.filter(node_status::device_id.eq(device_id)))
             .filter(node_status::subdomain.eq(subdomain))
             .set((
+                #[cfg(feature = "sqlite")]
                 node_status::last_active_time.eq(last_active_time.and_utc().timestamp()),
+                #[cfg(feature = "mysql")]
+                node_status::last_active_time.eq(last_active_time),
                 node_status::status.eq(status),
             ))
             .execute(&mut conn)?,
@@ -260,7 +331,10 @@ pub fn update_node_avail_time_and_status(
     Ok(
         diesel::update(node_status::table.filter(node_status::node_id.eq(node_id)))
             .set((
+                #[cfg(feature = "sqlite")]
                 node_status::last_avail_time.eq(last_avail_time.and_utc().timestamp()),
+                #[cfg(feature = "mysql")]
+                node_status::last_avail_time.eq(last_avail_time),
                 node_status::status.eq(status),
             ))
             .execute(&mut conn)?,
@@ -350,7 +424,12 @@ pub fn close_expired_nodes(seconds_before: &chrono::NaiveDateTime) -> Result<usi
     use crate::schema::node_status;
 
     Ok(diesel::update(node_status::table)
-        .filter(node_status::last_active_time.lt(seconds_before.and_utc().timestamp()))
+        .filter(
+            #[cfg(feature = "sqlite")]
+            node_status::last_active_time.lt(seconds_before.and_utc().timestamp()),
+            #[cfg(feature = "mysql")]
+            node_status::last_active_time.lt(seconds_before),
+        )
         .filter(node_status::status.eq(NODE_STATUS_ONLINE))
         .set((node_status::status.eq(NODE_STATUS_OFFLINE),))
         .execute(&mut conn)?)
@@ -362,7 +441,12 @@ pub fn unavail_expired_nodes(seconds_before: &chrono::NaiveDateTime) -> Result<u
     use crate::schema::node_status;
 
     Ok(diesel::update(node_status::table)
-        .filter(node_status::last_avail_time.lt(seconds_before.and_utc().timestamp()))
+        .filter(
+            #[cfg(feature = "sqlite")]
+            node_status::last_avail_time.lt(seconds_before.and_utc().timestamp()),
+            #[cfg(feature = "mysql")]
+            node_status::last_avail_time.lt(seconds_before),
+        )
         .filter(node_status::status.eq(NODE_STATUS_ONLINE))
         .set((node_status::status.eq(NODE_STATUS_UNAVAIL),))
         .execute(&mut conn)?)
@@ -543,7 +627,8 @@ pub fn get_nodes_by_domain(domain: &str) -> Result<Vec<(String, i64)>> {
 pub fn query_living_nodes_by_login_time(
     lived_secs: u64,
     page_size: i64,
-    earliest_login_time: i64,
+    #[cfg(feature = "sqlite")] earliest_login_time: i64,
+    #[cfg(feature = "mysql")] earliest_login_time: chrono::NaiveDateTime,
 ) -> Result<Vec<models::LivingNode>> {
     use crate::schema::node_status::dsl::*;
     let mut conn = establish_connection()?;

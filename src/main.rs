@@ -81,11 +81,14 @@ async fn close_expired_nodes(now: NaiveDateTime) {
 }
 
 async fn check_nodes_health(_now: NaiveDateTime) {
+    #[cfg(feature = "sqlite")]
     let mut earliest_login_time = chrono::DateTime::from_timestamp(0, 0)
         .unwrap()
         .naive_utc()
         .and_utc()
         .timestamp();
+    #[cfg(feature = "mysql")]
+    let mut earliest_login_time = chrono::DateTime::<chrono::Utc>::MIN_UTC.naive_utc();
 
     let least_lived_secs = 10;
     let page_size = 100;

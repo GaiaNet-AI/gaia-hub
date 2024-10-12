@@ -1,3 +1,4 @@
+#[cfg(feature = "sqlite")]
 diesel::table! {
     devices (id) {
         id -> Int4,
@@ -13,6 +14,23 @@ diesel::table! {
     }
 }
 
+#[cfg(feature = "mysql")]
+diesel::table! {
+    devices (id) {
+        id -> Int8,
+        device_id -> Varchar,
+        version -> Varchar,
+        arch -> Varchar,
+        os -> Varchar,
+        client_address -> Varchar,
+        login_time -> Datetime,
+        meta -> Json,
+        created_at -> Datetime,
+        updated_at -> Datetime,
+    }
+}
+
+#[cfg(feature = "sqlite")]
 diesel::table! {
     node_status (id) {
         id -> Int4,
@@ -34,6 +52,31 @@ diesel::table! {
         status -> Varchar,
         created_at -> Int8,
         updated_at -> Int8,
+    }
+}
+
+#[cfg(feature = "mysql")]
+diesel::table! {
+    node_status (id) {
+        id -> Int8,
+        node_id -> Varchar,
+        device_id -> Varchar,
+        subdomain -> Varchar,
+        version -> Varchar,
+        arch -> Varchar,
+        os -> Varchar,
+        client_address -> Varchar,
+        login_time -> Datetime,
+        last_active_time -> Datetime,
+        last_avail_time -> Nullable<Datetime>,
+        run_id -> Varchar,
+        meta -> Json,
+        node_version -> Varchar,
+        chat_model -> Varchar,
+        embedding_model -> Varchar,
+        status -> Varchar,
+        created_at -> Datetime,
+        updated_at -> Datetime,
     }
 }
 

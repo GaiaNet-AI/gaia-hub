@@ -60,7 +60,12 @@ async fn device_health_handler(
                             crate::NODE_LIVING_DURATION as i64,
                         ))
                         .unwrap();
+                    #[cfg(feature = "sqlite")]
                     if node.last_active_time > active_after.and_utc().timestamp() {
+                        update_node_avail_time_and_status(&node.node_id, &now, NODE_STATUS_ONLINE)?;
+                    }
+                    #[cfg(feature = "mysql")]
+                    if node.last_active_time > active_after {
                         update_node_avail_time_and_status(&node.node_id, &now, NODE_STATUS_ONLINE)?;
                     }
                 }
