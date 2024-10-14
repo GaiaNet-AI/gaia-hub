@@ -19,7 +19,7 @@ rm Dockerfile
 
 # Function to run SQLite commands
 run_sqlite() {
-    docker run --rm -v "$(pwd)/data/sqlite:/data/sqlite" sqlite3-alpine sqlite3 /data/sqlite/gaia-domain.db "$@"
+  docker run --rm -v "$(pwd)/data/sqlite:/data/sqlite" sqlite3-alpine sqlite3 /data/sqlite/gaia-domain.db "$@"
 }
 
 # SQL commands
@@ -33,10 +33,10 @@ CREATE TABLE devices (
   arch varchar NOT NULL,
   os varchar NOT NULL,
   client_address varchar NOT NULL,
-  login_time bigint ,
-  meta text ,
-  created_at bigint  DEFAULT (strftime('%s', 'now')),
-  updated_at bigint  DEFAULT (strftime('%s', 'now'))
+  login_time bigint,
+  meta text,
+  created_at bigint DEFAULT (strftime('%s', 'now')),
+  updated_at bigint DEFAULT (strftime('%s', 'now'))
 );
 
 CREATE TABLE node_status (
@@ -48,15 +48,15 @@ CREATE TABLE node_status (
   arch varchar NOT NULL,
   os varchar NOT NULL,
   client_address varchar NOT NULL,
-  login_time bigint ,
-  last_active_time bigint ,
-  last_avail_time bigint ,
+  login_time bigint,
+  last_active_time bigint,
+  last_avail_time bigint,
   run_id varchar DEFAULT "",
-  meta text ,
+  meta text,
   node_version varchar DEFAULT "",
   chat_model varchar DEFAULT "",
   embedding_model varchar DEFAULT "",
-  status varchar DEFAULT 'unknown',
+  status varchar,
   created_at bigint DEFAULT (strftime('%s', 'now')),
   updated_at bigint DEFAULT (strftime('%s', 'now'))
 );
